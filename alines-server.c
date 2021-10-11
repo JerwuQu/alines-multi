@@ -99,20 +99,26 @@ fail_reason copyUiResponse(int uifd, int menuerfd)
 	if (!fdReadU8(uifd, &pkId)) return FR_UI;
 
 	if (pkId == PKID_FROM_UI_CLOSE) {
+		log_info("ui sent close");
 		if (!fdWriteU8(menuerfd, pkId)) return FR_MENUER;
 	} else if (pkId == PKID_FROM_UI_SINGLE_SELECTION) {
+		log_info("ui sent single");
 		u16 sel;
 		if (!fdReadU16(uifd, &sel)) return FR_UI;
 		if (!fdWriteU8(menuerfd, pkId) || !fdWriteU16(menuerfd, sel)) return FR_MENUER;
 	} else if (pkId == PKID_FROM_UI_MULTI_SELECTION) {
+		// TODO: verify that UI was allowed to send this response
+		log_info("ui sent multi");
 		u16 len, idx;
 		if (!fdReadU16(uifd, &len)) return FR_UI;
-		if (!fdWriteU8(menuerfd, len)) return FR_MENUER;
+		if (!fdWriteU8(menuerfd, pkId) || !fdWriteU16(menuerfd, len)) return FR_MENUER;
 		for (u16 i = 0; i < len; i++) {
 			if (!fdReadU16(uifd, &idx)) return FR_UI;
-			if (!fdWriteU8(menuerfd, idx)) return FR_MENUER;
+			if (!fdWriteU16(menuerfd, idx)) return FR_MENUER;
 		}
 	} else if (pkId == PKID_FROM_UI_CUSTOM_ENTRY) {
+		// TODO: verify that UI was allowed to send this response
+		log_info("ui sent custom");
 		char *str;
 		if (!(str = fdReadStr(uifd))) return FR_UI;
 		if (!fdWriteU8(menuerfd, pkId) || !fdWriteStr(menuerfd, str)) return FR_MENUER;

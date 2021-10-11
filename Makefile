@@ -4,11 +4,11 @@ CFLAGS=-std=c99 -Wall -Wextra -pthread
 .PHONY: all
 all: alines-menu alines-server
 
-alines-menu: alines-menu.c
-	$(CC) $(CFLAGS) -o $@ $^
+alines-menu: alines-menu.c shared.c
+	$(CC) $(CFLAGS) -o $@ $<
 
-alines-server: alines-server.c
-	$(CC) $(CFLAGS) -o $@ $^
+alines-server: alines-server.c shared.c
+	$(CC) $(CFLAGS) -o $@ $<
 
 .PHONY: clean
 clean:
