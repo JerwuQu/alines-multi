@@ -23,7 +23,7 @@ void usage()
 
 int main(int argc, char **argv)
 {
-	bool outputIndex = false; // TODO
+	bool outputIndex = false;
 	char *title = "menu";
 	u8 flags = 0;
 
@@ -33,6 +33,8 @@ int main(int argc, char **argv)
 			usage();
 		} else if (!strcmp(argv[argi], "-t") && argi + 1 < argc) {
 			title = argv[++argi];
+		} else if (!strcmp(argv[argi], "-i")) {
+			outputIndex = true;
 		} else if (!strcmp(argv[argi], "-m")) {
 			flags |= MENU_FLAG_ALLOW_MULTI;
 		} else if (!strcmp(argv[argi], "-c")) {
@@ -40,6 +42,10 @@ int main(int argc, char **argv)
 		} else {
 			usage();
 		}
+	}
+
+	if (outputIndex && (flags & MENU_FLAG_ALLOW_CUSTOM)) {
+		panic("output index (-i) and custom entry (-c) cannot be used at the same time");
 	}
 
 	// Get socket path
@@ -122,7 +128,11 @@ int main(int argc, char **argv)
 		if (idx > entryCount) {
 			panic("invalid selection index");
 		}
-		printf("%s\n", entries[idx]);
+		if (outputIndex) {
+			printf("%d\n", idx);
+		} else {
+			printf("%s\n", entries[idx]);
+		}
 	} else if (pkId == PKID_FROM_UI_MULTI_SELECTION) {
 		u16 len, idx;
 		assert(fdReadU16(sockfd, &len));
@@ -131,7 +141,11 @@ int main(int argc, char **argv)
 			if (idx > entryCount) {
 				panic("invalid selection index");
 			}
-			printf("%s\n", entries[idx]);
+			if (outputIndex) {
+				printf("%d\n", idx);
+			} else {
+				printf("%s\n", entries[idx]);
+			}
 		}
 	} else if (pkId == PKID_FROM_UI_CUSTOM_ENTRY) {
 		char *custom = fdReadStr(sockfd);
