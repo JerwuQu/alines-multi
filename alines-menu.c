@@ -27,6 +27,8 @@ int main(int argc, char **argv)
 	char *title = "menu";
 	u8 flags = 0;
 
+	// TODO: add spec support for "selected index"
+
 	int argi = 1;
 	for (; argi < argc; argi++) {
 		if (!strcmp(argv[argi], "-h")) {

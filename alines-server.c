@@ -22,6 +22,7 @@
 typedef enum { FR_OK = 0, FR_UI, FR_MENUER } fail_reason;
 
 // Globals
+extern char **environ;
 char *G_programArgv[1024] = { NULL };
 char *G_password = "";
 
@@ -190,18 +191,30 @@ void *ui_thread(void *data)
 		log_info("handshake ok!");
 	}
 
-	// Setup env
+	// Inherit env from parent
+	size_t parentEnvCount = 0;
+	{
+		char **e = environ;
+		while (*(e++)) parentEnvCount++;
+	}
+	char **programEnv = xmalloc((parentEnvCount + 1) * sizeof(char*));
+	programEnv[parentEnvCount + 1] = NULL;
+	for (size_t i = 0; i < parentEnvCount; i++) {
+		programEnv[i] = environ[i];
+	}
+
+	// Create env var for domain socket
 	char socketPathEnv[] = ENV_ALINES_SOCKET "=" TMPFILE_TEMPLATE;
-	char *env[2] = { socketPathEnv, NULL };
 	char *socketPath = &socketPathEnv[sizeof(ENV_ALINES_SOCKET)];
 	fillTempName(socketPath);
+	programEnv[parentEnvCount] = socketPathEnv;
 
 	// Exec
 	const int forkPid = fork();
 	if (forkPid < 0) {
 		panic("fork failed");
 	} else if (!forkPid) {
-		execve(G_programArgv[0], G_programArgv, env);
+		execve(G_programArgv[0], G_programArgv, programEnv);
 		panic("program exec failed");
 	}
 
@@ -227,6 +240,7 @@ void *ui_thread(void *data)
 	// Accept menuers
 	while (true) {
 		if (kill(forkPid, 0)) {
+			// TODO: report success/error based on exit code
 			uiDisconnect(uifd, "program exited");
 			break;
 		}
@@ -244,6 +258,7 @@ void *ui_thread(void *data)
 	}
 
 	close(menuerServerFd);
+	free(programEnv);
 	return NULL;
 }
 
