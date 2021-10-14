@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-std=c99 -Wall -Wextra -pthread
+CFLAGS=-std=c99 -O2 -Wall -Wextra -pthread
 
 .PHONY: all
 all: alines-menu alines-server
