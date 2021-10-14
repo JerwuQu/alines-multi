@@ -65,31 +65,26 @@ void menuerClose(int menuerfd)
 
 fail_reason copyNewMenu(int menuerfd, int uifd)
 {
+	char strCpyBuf[u16_MAX + 1];
+
 	// Read header
 	u8 flags;
-	char *title;
 	u16 entryCount;
 	if (!fdReadU8(menuerfd, &flags) || !fdReadU16(menuerfd, &entryCount)
-			|| !(title = fdReadStr(menuerfd))) {
+			|| fdReadStrBuf(menuerfd, strCpyBuf) < 0) {
 		return FR_MENUER;
 	}
 
 	// Write header
 	if (!fdWriteU8(uifd, PKID_TO_UI_MENU) || !fdWriteU8(uifd, flags)
-			|| !fdWriteU16(uifd, entryCount) || !fdWriteStr(uifd, title)) {
+			|| !fdWriteU16(uifd, entryCount) || !fdWriteStr(uifd, strCpyBuf)) {
 		return FR_MENUER;
 	}
-	free(title);
 
-	// Copy menu entries - TODO: fix inefficient mallocs, also buffer the whole thing
+	// Copy menu entries
 	for (u16 i = 0; i < entryCount; i++) {
-		char *entry = fdReadStr(menuerfd);
-		if (!entry) return FR_MENUER;
-		if (!fdWriteStr(uifd, entry)) {
-			free(entry);
-			return FR_UI;
-		}
-		free(entry);
+		if (fdReadStrBuf(menuerfd, strCpyBuf) < 0) return FR_MENUER;
+		if (!fdWriteStr(uifd, strCpyBuf)) return FR_UI;
 	}
 	return FR_OK;
 }
@@ -120,10 +115,9 @@ fail_reason copyUiResponse(int uifd, int menuerfd)
 	} else if (pkId == PKID_FROM_UI_CUSTOM_ENTRY) {
 		// TODO: verify that UI was allowed to send this response
 		log_info("ui sent custom");
-		char *str;
-		if (!(str = fdReadStr(uifd))) return FR_UI;
-		if (!fdWriteU8(menuerfd, pkId) || !fdWriteStr(menuerfd, str)) return FR_MENUER;
-		free(str);
+		char entryStr[u16_MAX + 1];
+		if (fdReadStrBuf(uifd, entryStr) < 0) return FR_UI;
+		if (!fdWriteU8(menuerfd, pkId) || !fdWriteStr(menuerfd, entryStr)) return FR_MENUER;
 	} else {
 		return FR_UI;
 	}
@@ -177,13 +171,12 @@ void *ui_thread(void *data)
 	// Handshake
 	{
 		log_info("awaiting handshake");
-		char *clientPassword = NULL;
-		if (!(clientPassword = fdReadStr(uifd))) {
+		char clientPassword[u16_MAX + 1];
+		if (fdReadStrBuf(uifd, clientPassword) < 0) {
 			uiDisconnect(uifd, "expected password");
 			return NULL;
 		}
 		const bool passMatch = !strcmp(clientPassword, G_password);
-		free(clientPassword);
 		if (!passMatch) {
 			uiDisconnect(uifd, "incorrect password");
 			return NULL;

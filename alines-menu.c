@@ -151,9 +151,9 @@ int main(int argc, char **argv)
 			}
 		}
 	} else if (pkId == PKID_FROM_UI_CUSTOM_ENTRY) {
-		char *custom = fdReadStr(sockfd);
-		assert(custom);
-		printf("%s\n", custom);
+		char entryStr[u16_MAX + 1];
+		assert(fdReadStrBuf(sockfd, entryStr) >= 0);
+		printf("%s\n", entryStr);
 	} else {
 		panic("invalid response packet");
 		return 1;

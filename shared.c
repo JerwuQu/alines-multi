@@ -71,20 +71,15 @@ bool fdReadU16(int fd, u16 *out)
 	return true;
 }
 
-// NOTE: caller needs to free
-char *fdReadStr(int fd)
+// NOTE: buf should be of at least u16_MAX+1 in size
+int fdReadStrBuf(int fd, char *buf)
 {
 	u16 len;
-	if (!fdReadU16(fd, &len)) {
-		return NULL;
+	if (!fdReadU16(fd, &len) || read(fd, buf, len) != len) {
+		return -1;
 	}
-	char *out = xmalloc(len + 1);
-	if (read(fd, out, len) != len) {
-		free(out);
-		return NULL;
-	}
-	out[len] = 0;
-	return out;
+	buf[len] = 0;
+	return len;
 }
 
 bool fdWriteU8(int fd, u8 n)
