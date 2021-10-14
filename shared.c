@@ -41,6 +41,15 @@ void *xmalloc(size_t sz)
 	return mem;
 }
 
+void *xrealloc(void *ptr, size_t sz)
+{
+	void *mem = realloc(ptr, sz);
+	if (!mem) {
+		panic("realloc failed");
+	}
+	return mem;
+}
+
 void log_info(char *str)
 {
 	fprintf(stderr, "info: %s\n", str);

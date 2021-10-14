@@ -57,15 +57,16 @@ int main(int argc, char **argv)
 	}
 
 	// Read stdin
-	char *inData = NULL;
+	size_t inDataCap = 4096;
+	char *inData = xmalloc(inDataCap);
 	size_t inDataLen = 0;
 	{
 		size_t readLen;
-		char buf[1024];
+		char buf[4096];
 		while ((readLen = fread(buf, 1, sizeof(buf), stdin))) {
-			inData = realloc(inData, inDataLen + readLen + 1);
-			if (!inData) {
-				panic("realloc failed");
+			if (inDataLen + readLen + 1 >= inDataCap) {
+				inDataCap <<= 1;
+				inData = xrealloc(inData, inDataCap);
 			}
 			memcpy(inData + inDataLen, buf, readLen);
 			inDataLen += readLen;
