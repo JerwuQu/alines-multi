@@ -31,9 +31,9 @@ void usage()
 	fprintf(stderr,
 		"alines-server [options] <program/script> [args...]\n"
 		"Options:\n"
-		"\n-h help\n"
-		"\n-p <port (64937)>\n"
-		"\n-P <password (none)>\n"
+		"\t-h help\n"
+		"\t-p <port (64937)>\n"
+		"\t-P <password (none)>\n"
 	);
 	exit(1);
 }
