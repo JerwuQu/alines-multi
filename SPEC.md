@@ -2,16 +2,17 @@
 
 UI - Server (`alines-server`) - Program - Menuer (`alines-menu`)
 
-Upon UI connecting to server, it will first be required to send its handshake packet.
-After handshake, Server spawns a new thread and process for Program which in turn may start many Menuers.
+Upon UI connecting to server, it will first be required to send its connection request packet.
+After handshake, Server spawns a new thread and process for the Program which in turn may start many Menuers (serially).
+In other words: one connection = one process.
 
 The Server communicates with Menuers over a domain socket.
 The Server will only accept one Menuer at a time.
 
-A Menuer will upon connect send a single Menuer containing its menu, and nothing else.
-If a Menuer disconnects, the Server will in turn disconnect the UI.
+A Menuer will upon connect send a single packet containing its menu, and nothing else.
+If a Menuer disconnects before receiving a response, the Server will send a Close Menu packet to the UI.
 
-UI disconnecting will make Server send Close to any potentially connected Menuers until Program terminates.
+UI disconnecting will make Server send Close to any potentially connected Menuers until the Program terminates.
 
 ## Universal
 
@@ -32,12 +33,16 @@ UI disconnecting will make Server send Close to any potentially connected Menuer
 - id: **0** (u8)
 - message: string
 
-#### Menu
+#### Open Menu
 - id: **1** (u8)
 - flags: u8 (0: none, 1: multiple choice allowed, 2: custom entry allowed)
 - entryCount: u16
+- selectedEntry: u16 (1-indexed, 0 meaning none)
 - title: string
 - menu: string[entryCount]
+
+#### Close Menu
+- id: **2**
 
 ### UI->Server
 
@@ -56,6 +61,4 @@ UI disconnecting will make Server send Close to any potentially connected Menuer
 #### Custom Entry
 - id: **3** (u8)
 - text: string
-
-**Repeat until disconnect**
 

@@ -27,8 +27,6 @@ int main(int argc, char **argv)
 	char *title = "menu";
 	u8 flags = 0;
 
-	// TODO: add spec support for "selected index"
-
 	int argi = 1;
 	for (; argi < argc; argi++) {
 		if (!strcmp(argv[argi], "-h")) {
@@ -115,6 +113,7 @@ int main(int argc, char **argv)
 	// Send menu
 	assert(fdWriteU8(sockfd, flags));
 	assert(fdWriteU16(sockfd, entryCount));
+	assert(fdWriteU16(sockfd, 0)); // TODO: selected entry
 	assert(fdWriteStr(sockfd, title));
 	for (u16 i = 0; i < entryCount; i++) {
 		assert(fdWriteStr(sockfd, entries[i]));
@@ -123,7 +122,7 @@ int main(int argc, char **argv)
 	// Receive response
 	u8 pkId;
 	assert(fdReadU8(sockfd, &pkId));
-	if (pkId == PKID_FROM_UI_CLOSE) {
+	if (pkId == PKID_FROM_UI_NO_SELECTION) {
 		return 1;
 	} else if (pkId == PKID_FROM_UI_SINGLE_SELECTION) {
 		u16 idx;

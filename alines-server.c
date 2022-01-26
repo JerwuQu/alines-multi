@@ -29,7 +29,7 @@ char *G_password = "";
 void usage()
 {
 	fprintf(stderr,
-		"alines-server [options] <program/script> [args...]\n"
+		"alines-server [options] <program/script> [program args...]\n"
 		"Options:\n"
 		"\t-h help\n"
 		"\t-p <port (64937)>\n"
@@ -57,9 +57,14 @@ void uiDisconnect(int uifd, char *msg)
 	close(uifd);
 }
 
-void menuerClose(int menuerfd)
+void uiCloseMenu(int uifd)
 {
-	fdWriteU8(menuerfd, PKID_FROM_UI_CLOSE); // packet id
+	fdWriteU8(uifd, PKID_TO_UI_CLOSE_MENU); // packet id
+}
+
+void menuerCloseDisconnect(int menuerfd)
+{
+	fdWriteU8(menuerfd, PKID_FROM_UI_NO_SELECTION); // packet id
 	close(menuerfd);
 }
 
@@ -69,15 +74,20 @@ fail_reason copyNewMenu(int menuerfd, int uifd)
 
 	// Read header
 	u8 flags;
-	u16 entryCount;
-	if (!fdReadU8(menuerfd, &flags) || !fdReadU16(menuerfd, &entryCount)
+	u16 entryCount, selectedEntry;
+	if (!fdReadU8(menuerfd, &flags)
+			|| !fdReadU16(menuerfd, &entryCount)
+			|| !fdReadU16(menuerfd, &selectedEntry)
 			|| fdReadStrBuf(menuerfd, strCpyBuf) < 0) {
 		return FR_MENUER;
 	}
 
 	// Write header
-	if (!fdWriteU8(uifd, PKID_TO_UI_MENU) || !fdWriteU8(uifd, flags)
-			|| !fdWriteU16(uifd, entryCount) || !fdWriteStr(uifd, strCpyBuf)) {
+	if (!fdWriteU8(uifd, PKID_TO_UI_OPEN_MENU)
+			|| !fdWriteU8(uifd, flags)
+			|| !fdWriteU16(uifd, entryCount)
+			|| !fdWriteU16(uifd, selectedEntry)
+			|| !fdWriteStr(uifd, strCpyBuf)) {
 		return FR_MENUER;
 	}
 
@@ -94,7 +104,7 @@ fail_reason copyUiResponse(int uifd, int menuerfd)
 	u8 pkId;
 	if (!fdReadU8(uifd, &pkId)) return FR_UI;
 
-	if (pkId == PKID_FROM_UI_CLOSE) {
+	if (pkId == PKID_FROM_UI_NO_SELECTION) {
 		log_info("ui sent close");
 		if (!fdWriteU8(menuerfd, pkId)) return FR_MENUER;
 	} else if (pkId == PKID_FROM_UI_SINGLE_SELECTION) {
@@ -124,8 +134,7 @@ fail_reason copyUiResponse(int uifd, int menuerfd)
 	return FR_OK;
 }
 
-// true: keep accepting new menuers, false: don't
-bool accept_menuer(int menuerServerFd, int uifd)
+void accept_menuer(int menuerServerFd, int uifd)
 {
 	const int menuerfd = accept(menuerServerFd, NULL, NULL);
 	if (menuerfd < 0) {
@@ -137,30 +146,56 @@ bool accept_menuer(int menuerServerFd, int uifd)
 	if (fr == FR_MENUER) {
 		uiDisconnect(uifd, "menuer not responding with menu");
 		close(menuerfd);
-		return false;
+		return;
 	} else if (fr == FR_UI) {
 		log_info("failed to send menu to ui");
 		close(uifd);
-		menuerClose(menuerfd);
-		return false;
+		menuerCloseDisconnect(menuerfd);
+		return;
 	}
 	log_info("menu sent to ui");
 
-	fr = copyUiResponse(uifd, menuerfd);
-	if (fr == FR_MENUER) {
-		uiDisconnect(uifd, "menu not receiving response");
-		close(menuerfd);
-		return false;
-	} else if (fr == FR_UI) {
-		log_info("failed to get response from UI");
-		close(uifd);
-		menuerClose(menuerfd);
-		return false;
-	}
+	// Poll on both UI and Menuer to see if Menuer disconnects before UI sends a response
+	struct pollfd pollFds[2] = {
+		{
+			.fd = uifd,
+			.events = POLLIN,
+		},
+		{
+			.fd = menuerfd,
+		},
+	};
+	while (true) {
+		if (poll(pollFds, 2, 100) < 0) {
+			continue;
+		}
 
-	close(menuerfd);
-	log_info("menuer closed successfully");
-	return true;
+		// If UI has data, copy response to Menuer
+		if (pollFds[0].revents & POLLIN) {
+			fr = copyUiResponse(uifd, menuerfd);
+			if (fr == FR_MENUER) {
+				log_info("menuer not accepting response");
+				uiCloseMenu(uifd);
+				close(menuerfd);
+				return;
+			} else if (fr == FR_UI) {
+				log_info("failed to get response from UI");
+				close(uifd);
+				menuerCloseDisconnect(menuerfd);
+				return;
+			}
+			close(menuerfd);
+			return;
+		}
+
+		// If Menuer disconnected, close menu
+		if (pollFds[1].revents & (POLLERR | POLLHUP)) {
+			log_info("menuer disconnected");
+			uiCloseMenu(uifd);
+			close(menuerfd);
+			return;
+		}
+	}
 }
 
 void *ui_thread(void *data)
@@ -190,7 +225,7 @@ void *ui_thread(void *data)
 		char **e = environ;
 		while (*(e++)) parentEnvCount++;
 	}
-	char **programEnv = xmalloc((parentEnvCount + 1) * sizeof(char*));
+	char **programEnv = xmalloc((parentEnvCount + 2) * sizeof(char*));
 	programEnv[parentEnvCount + 1] = NULL;
 	for (size_t i = 0; i < parentEnvCount; i++) {
 		programEnv[i] = environ[i];
@@ -244,9 +279,7 @@ void *ui_thread(void *data)
 
 		if (pollFd.revents & POLLIN) {
 			log_info("accepting menuer...");
-			if (!accept_menuer(menuerServerFd, uifd)) {
-				break;
-			}
+			accept_menuer(menuerServerFd, uifd);
 		}
 	}
 
