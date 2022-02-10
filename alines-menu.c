@@ -15,7 +15,7 @@ void usage()
 		"\t-h help\n"
 		"\t-t <menu title>\n"
 		"\t-i output selected index rather than string\n"
-		"\t-m enable mutli-select\n"
+		"\t-m enable multi-select\n"
 		"\t-c enable custom entry\n"
 	);
 	exit(1);
