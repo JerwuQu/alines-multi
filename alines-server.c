@@ -134,7 +134,8 @@ fail_reason copyUiResponse(int uifd, int menuerfd)
 	return FR_OK;
 }
 
-void accept_menuer(int menuerServerFd, int uifd)
+// returns true if UI is still connected after handling menuer
+bool accept_menuer(int menuerServerFd, int uifd)
 {
 	const int menuerfd = accept(menuerServerFd, NULL, NULL);
 	if (menuerfd < 0) {
@@ -146,12 +147,12 @@ void accept_menuer(int menuerServerFd, int uifd)
 	if (fr == FR_MENUER) {
 		uiDisconnect(uifd, "menuer not responding with menu");
 		close(menuerfd);
-		return;
+		return false;
 	} else if (fr == FR_UI) {
 		log_info("failed to send menu to ui");
 		close(uifd);
 		menuerCloseDisconnect(menuerfd);
-		return;
+		return false;
 	}
 	log_info("menu sent to ui");
 
@@ -177,15 +178,15 @@ void accept_menuer(int menuerServerFd, int uifd)
 				log_info("menuer not accepting response");
 				uiCloseMenu(uifd);
 				close(menuerfd);
-				return;
+				return true;
 			} else if (fr == FR_UI) {
 				log_info("failed to get response from UI");
 				close(uifd);
 				menuerCloseDisconnect(menuerfd);
-				return;
+				return false;
 			}
 			close(menuerfd);
-			return;
+			return true;
 		}
 
 		// If Menuer disconnected, close menu
@@ -193,7 +194,7 @@ void accept_menuer(int menuerServerFd, int uifd)
 			log_info("menuer disconnected");
 			uiCloseMenu(uifd);
 			close(menuerfd);
-			return;
+			return true;
 		}
 	}
 }
@@ -265,7 +266,7 @@ void *ui_thread(void *data)
 		.events = POLLIN,
 	};
 
-	// Accept menuers
+	// Accept menuers while UI is connected
 	while (true) {
 		if (kill(forkPid, 0)) {
 			// TODO: report success/error based on exit code
@@ -279,7 +280,9 @@ void *ui_thread(void *data)
 
 		if (pollFd.revents & POLLIN) {
 			log_info("accepting menuer...");
-			accept_menuer(menuerServerFd, uifd);
+			if (!accept_menuer(menuerServerFd, uifd)) {
+				break;
+			}
 		}
 	}
 
