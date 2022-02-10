@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/un.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #include "shared.c"
 
@@ -14,6 +15,7 @@ void usage()
 		"Options:\n"
 		"\t-h help\n"
 		"\t-t <menu title>\n"
+		"\t-s <pre-selected index, 0-indexed>\n"
 		"\t-i output selected index rather than string\n"
 		"\t-m enable multi-select\n"
 		"\t-c enable custom entry\n"
@@ -26,6 +28,7 @@ int main(int argc, char **argv)
 	bool outputIndex = false;
 	char *title = "menu";
 	u8 flags = 0;
+	u16 selectedEntry = 0; // 1-indexed
 
 	int argi = 1;
 	for (; argi < argc; argi++) {
@@ -33,6 +36,12 @@ int main(int argc, char **argv)
 			usage();
 		} else if (!strcmp(argv[argi], "-t") && argi + 1 < argc) {
 			title = argv[++argi];
+		} else if (!strcmp(argv[argi], "-s") && argi + 1 < argc) {
+			const uintmax_t conv = strtoumax(argv[++argi], NULL, 10);
+			if (conv == UINTMAX_MAX) {
+				usage();
+			}
+			selectedEntry = conv + 1;
 		} else if (!strcmp(argv[argi], "-i")) {
 			outputIndex = true;
 		} else if (!strcmp(argv[argi], "-m")) {
@@ -85,6 +94,11 @@ int main(int argc, char **argv)
 		panic("too many entries");
 	}
 
+	// Check if selectedEntry is valid
+	if (selectedEntry && selectedEntry > entryCount) {
+		panic("selected entry out of bounds");
+	}
+
 	// Read entries
 	char **entries = xmalloc(entryCount * sizeof(char*));
 	size_t dataStart = 0;
@@ -113,7 +127,7 @@ int main(int argc, char **argv)
 	// Send menu
 	assert(fdWriteU8(sockfd, flags));
 	assert(fdWriteU16(sockfd, entryCount));
-	assert(fdWriteU16(sockfd, 0)); // TODO: selected entry
+	assert(fdWriteU16(sockfd, selectedEntry));
 	assert(fdWriteStr(sockfd, title));
 	for (u16 i = 0; i < entryCount; i++) {
 		assert(fdWriteStr(sockfd, entries[i]));
